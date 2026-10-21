@@ -469,11 +469,7 @@ async function detectCraveLocation() {
     }
   );
 }
-    return;
-  }
-
-  status.textContent = 'Requesting your location…';
-
+    
   navigator.geolocation.getCurrentPosition(
     function(position) {
       const lat = position.coords.latitude;
