@@ -422,7 +422,17 @@ function updateClock(){document.getElementById('clock').textContent='Demo · '+n
               aria-label="Close">×</button>
     </div>
 
-    <p>Choose an area in Hyderabad. No typing needed.</p>
+    <p>Choose an area in Hyderabad, or use your device location.</p>
+
+    <button class="location-option" type="button"
+            onclick="detectCraveLocation()">
+      <span class="loc-icon">🧭</span>
+      <span>
+        <strong>Use my current location</strong>
+        <small id="craveLocationStatus">Allow location access to find your area</small>
+      </span>
+      <span class="loc-check">›</span>
+    </button>
 
     <button class="location-option" type="button"
             onclick="chooseArea('Hyderabad')">
@@ -464,7 +474,11 @@ function updateClock(){document.getElementById('clock').textContent='Demo · '+n
       <span class="loc-check">›</span>
     </button>
 
-    <p>GPS location detection will be added next.</p>
+    <p>Location access is optional. You can always choose an area manually.</p>
   </section>
 </div>
+</body></html>
+
+
+
 </body></html>
