@@ -208,17 +208,28 @@ async function connectBackend(){const url=document.getElementById('backendUrl').
 function disconnectBackend(){backendConnected=false;remoteYaps=[];remoteScoutReports=[];liveTrendRows=[];document.getElementById('statusText').textContent='FOOD PULSE · DEMO MODE';const banner=document.querySelector('#screen-pulse .demo-banner');banner.innerHTML='<span>✳</span><div><strong>Prototype data</strong> · Trends and counts are illustrative until real scout submissions are connected. No live restaurant or visit data is being claimed.</div>';backendConfig=null;writeStore('craveBackendConfig',null);document.getElementById('backendKey').value='';document.getElementById('backendStatus').textContent='Disconnected · local-only mode is active.';document.getElementById('approvedCount').textContent=scoutReports.filter(r=>r.status==='Approved').length;renderExplore();renderScoutQueue();showToast('Disconnected. Local submissions remain on this device.')}
 async function restoreBackend(){if(!backendConfig?.url||!backendConfig?.key)return;document.getElementById('backendUrl').value=backendConfig.url;document.getElementById('backendKey').value=backendConfig.key;await connectBackend()}
 
+
 function cycleArea() {
   const areas = [
     'Hyderabad',
-    'All areas',
     'HITEC City',
     'Madhapur',
     'Gachibowli',
     'Kondapur'
   ];
 
-  const current = document.getElementById('areaLabel').textContent;
+  const current =
+    document.getElementById('areaLabel').textContent;
+
+  const picker = document.getElementById('locationPicker');
+
+  if (picker) {
+    picker.classList.add('open');
+    picker.setAttribute('aria-hidden', 'false');
+    return;
+  }
+
+  // Temporary fallback until the picker HTML is added.
   const choice = window.prompt(
     'Choose a location:\n' + areas.join('\n'),
     current
@@ -231,17 +242,29 @@ function cycleArea() {
   );
 
   if (!selected) {
-    showToast('Choose a location from the list.');
+    showToast('Choose a listed Hyderabad area.');
     return;
   }
 
+  chooseArea(selected);
+}
+
+function chooseArea(selected) {
+  const validAreas = [
+    'Hyderabad',
+    'HITEC City',
+    'Madhapur',
+    'Gachibowli',
+    'Kondapur'
+  ];
+
+  if (!validAreas.includes(selected)) return;
+
   document.getElementById('areaLabel').textContent =
-    selected === 'All areas' ? 'Hyderabad' : selected;
+    selected === 'Hyderabad' ? 'Hyderabad' : selected;
 
   selectedArea =
-    selected === 'Hyderabad' || selected === 'All areas'
-      ? 'All areas'
-      : selected;
+    selected === 'Hyderabad' ? 'All areas' : selected;
 
   document.querySelectorAll('#areaFilters .chip').forEach(button => {
     button.classList.toggle(
@@ -250,17 +273,34 @@ function cycleArea() {
     );
   });
 
-  renderTrends();
-
   const yapArea = document.getElementById('yapArea');
-  if (selectedArea !== 'All areas') {
+
+  if (selectedArea !== 'All areas' && yapArea) {
     const option = [...yapArea.options].find(
       item => item.textContent === selectedArea
     );
+
     if (option) yapArea.value = option.value;
   }
 
-  showToast('Location filter updated: ' + selected);
+  renderTrends();
+
+  const picker = document.getElementById('locationPicker');
+  if (picker) {
+    picker.classList.remove('open');
+    picker.setAttribute('aria-hidden', 'true');
+  }
+
+  showToast('Location updated: ' + selected);
+}
+
+function closeLocationPicker() {
+  const picker = document.getElementById('locationPicker');
+
+  if (picker) {
+    picker.classList.remove('open');
+    picker.setAttribute('aria-hidden', 'true');
+  }
 }
 function val(id){return document.getElementById(id).value.trim()}function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600)}
 function updateClock(){document.getElementById('clock').textContent='Demo · '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}function init(){document.getElementById('dishCount').textContent=demoTrends.length.toString().padStart(2,'0')+' dishes';document.getElementById('risingName').textContent=demoTrends.slice().sort((a,b)=>b.delta-a.delta)[0].dish.split(' ').slice(-1)[0]+' ↗';document.getElementById('approvedCount').textContent=scoutReports.filter(r=>r.status==='Approved').length+remoteScoutReports.length;renderTrends();renderExplore();renderMyYaps();renderScoutQueue();updateClock()}init();if(backendConfig?.url&&backendConfig?.key){restoreBackend();}
