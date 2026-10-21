@@ -207,7 +207,61 @@ async function backendRequest(table,options={}){if(!backendConfig?.url||!backend
 async function connectBackend(){const url=document.getElementById('backendUrl').value.trim().replace(/\/$/,'');const key=document.getElementById('backendKey').value.trim();const status=document.getElementById('backendStatus');if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)||!key){status.textContent='Enter a valid Supabase project URL and anon/publishable key.';return}backendConfig={url,key};status.textContent='Testing connection…';try{await backendRequest('yaps','?select=id&limit=1');const approved=await backendRequest('scout_reports','?select=id,area,time_seen,restaurant,dish,signal,note,evidence,status,created_at&status=eq.approved&order=created_at.desc&limit=100');const remote=await backendRequest('yaps','?select=id,restaurant,dish,area,signal,note,self_reported_visit,verification_method,verification_status,verification_level,created_at&order=created_at.desc&limit=100');const trendRows=await backendRequest('yap_trend_signal_summary','?select=*&order=recent_weight.desc&limit=100');liveTrendRows=(trendRows||[]).filter(r=>Number(r.recent_reports||0)>0);remoteScoutReports=(approved||[]).map(r=>({...r,status:'Approved',submittedAt:r.created_at,time:r.created_at}));remoteYaps=(remote||[]).map(r=>({...r,verified:false,verificationMethod:r.verification_method==='none'?'unverified':(r.verification_method||'unverified'),verificationStatus:r.verification_status||'unverified',verificationLevel:r.verification_level||'unverified',status:'Community report',time:r.created_at}));backendConnected=true;writeStore('craveBackendConfig',backendConfig);document.getElementById('backendUrl').value=url;document.getElementById('backendKey').value=key;status.textContent='Connected · shared Yaps, approved scout reports and trend summary loaded. Verification evidence stays private and pending until reviewed.';if(liveTrendRows.length){document.getElementById('statusText').textContent='FOOD PULSE · LIVE COMMUNITY SIGNALS';const banner=document.querySelector('#screen-pulse .demo-banner');banner.innerHTML='<span>✳</span><div><strong>Live community signals</strong> · Trend rows are calculated from Crave reports. Confidence remains low until account-level duplicate checks are active.</div>';}document.getElementById('approvedCount').textContent=scoutReports.filter(r=>r.status==='Approved').length+remoteScoutReports.length;renderExplore();renderMyYaps();renderScoutQueue();renderTrends();showToast(liveTrendRows.length?'Crave is showing live community trend signals.':'Crave is connected; there are not enough recent reports to replace demo trends yet.')}catch(err){backendConnected=false;status.textContent='Connection failed: '+err.message+' Check that you ran the supplied SQL and configured RLS policies.';showToast('Could not connect to shared data.')}}
 function disconnectBackend(){backendConnected=false;remoteYaps=[];remoteScoutReports=[];liveTrendRows=[];document.getElementById('statusText').textContent='FOOD PULSE · DEMO MODE';const banner=document.querySelector('#screen-pulse .demo-banner');banner.innerHTML='<span>✳</span><div><strong>Prototype data</strong> · Trends and counts are illustrative until real scout submissions are connected. No live restaurant or visit data is being claimed.</div>';backendConfig=null;writeStore('craveBackendConfig',null);document.getElementById('backendKey').value='';document.getElementById('backendStatus').textContent='Disconnected · local-only mode is active.';document.getElementById('approvedCount').textContent=scoutReports.filter(r=>r.status==='Approved').length;renderExplore();renderScoutQueue();showToast('Disconnected. Local submissions remain on this device.')}
 async function restoreBackend(){if(!backendConfig?.url||!backendConfig?.key)return;document.getElementById('backendUrl').value=backendConfig.url;document.getElementById('backendKey').value=backendConfig.key;await connectBackend()}
-function cycleArea(){const areas=['Hyderabad','HITEC City','Madhapur','Gachibowli','Kondapur'];const cur=areas.indexOf(document.getElementById('areaLabel').textContent);document.getElementById('areaLabel').textContent=areas[(cur+1)%areas.length];showToast('Area display changed. This demo does not use GPS.')}
+
+function cycleArea() {
+  const areas = [
+    'Hyderabad',
+    'All areas',
+    'HITEC City',
+    'Madhapur',
+    'Gachibowli',
+    'Kondapur'
+  ];
+
+  const current = document.getElementById('areaLabel').textContent;
+  const choice = window.prompt(
+    'Choose a location:\n' + areas.join('\n'),
+    current
+  );
+
+  if (!choice) return;
+
+  const selected = areas.find(
+    area => area.toLowerCase() === choice.trim().toLowerCase()
+  );
+
+  if (!selected) {
+    showToast('Choose a location from the list.');
+    return;
+  }
+
+  document.getElementById('areaLabel').textContent =
+    selected === 'All areas' ? 'Hyderabad' : selected;
+
+  selectedArea =
+    selected === 'Hyderabad' || selected === 'All areas'
+      ? 'All areas'
+      : selected;
+
+  document.querySelectorAll('#areaFilters .chip').forEach(button => {
+    button.classList.toggle(
+      'active',
+      button.dataset.area === selectedArea
+    );
+  });
+
+  renderTrends();
+
+  const yapArea = document.getElementById('yapArea');
+  if (selectedArea !== 'All areas') {
+    const option = [...yapArea.options].find(
+      item => item.textContent === selectedArea
+    );
+    if (option) yapArea.value = option.value;
+  }
+
+  showToast('Location filter updated: ' + selected);
+}
 function val(id){return document.getElementById(id).value.trim()}function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600)}
 function updateClock(){document.getElementById('clock').textContent='Demo · '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}function init(){document.getElementById('dishCount').textContent=demoTrends.length.toString().padStart(2,'0')+' dishes';document.getElementById('risingName').textContent=demoTrends.slice().sort((a,b)=>b.delta-a.delta)[0].dish.split(' ').slice(-1)[0]+' ↗';document.getElementById('approvedCount').textContent=scoutReports.filter(r=>r.status==='Approved').length+remoteScoutReports.length;renderTrends();renderExplore();renderMyYaps();renderScoutQueue();updateClock()}init();if(backendConfig?.url&&backendConfig?.key){restoreBackend();}
 </script>
