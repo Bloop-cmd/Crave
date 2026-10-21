@@ -1,195 +1,282 @@
-
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>Crave Admin</title>
 <style>
-body{margin:0;background:#10120f;color:#f6f4eb;font:15px system-ui;padding:20px}
-main{max-width:760px;margin:auto}
-.card{background:#191c17;border:1px solid #30352c;border-radius:16px;padding:16px;margin:14px 0}
-input{box-sizing:border-box;width:100%;padding:12px;margin:6px 0 12px;background:#10120f;color:white;border:1px solid #444;border-radius:8px}
-button{padding:11px 14px;border:0;border-radius:8px;margin:4px;background:#d8fa65;font-weight:bold;cursor:pointer}
-.reject{background:#482a27;color:white}
-small,.muted{color:#a2a79a}
-.notice{color:#ffd66b}
+:root{color-scheme:dark;--bg:#10120f;--panel:#191c17;--line:#30352c;--text:#f6f4eb;--muted:#a2a79a;--lime:#d8fa65;--danger:#482a27;--warn:#ffd66b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif;padding:18px}
+main{max-width:760px;margin:0 auto}
+h1{font-size:clamp(1.8rem,6vw,2.4rem);margin:.2rem 0}
+h2{font-size:1.2rem;margin:.2rem 0 .8rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0;overflow-wrap:anywhere}
+.muted,small{color:var(--muted)}
+label{display:block;margin:10px 0 4px}
+input{display:block;width:100%;padding:12px;margin:5px 0 12px;background:var(--bg);color:var(--text);border:1px solid #555d4c;border-radius:9px;font:inherit}
+button{padding:11px 14px;border:0;border-radius:9px;margin:4px 4px 4px 0;background:var(--lime);color:#14160f;font:inherit;font-weight:700;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.secondary{background:#343a2d;color:var(--text)}
+button.reject{background:var(--danger);color:white}
+.notice{color:var(--warn)}
+.status{white-space:pre-wrap;overflow-wrap:anywhere}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
 <main>
-<h1>crave. Admin</h1>
-<p class="muted">Verification review dashboard</p>
+  <h1>crave. Admin</h1>
+  <p class="muted">Private verification review dashboard</p>
 
-<section class="card" id="setup">
-<h2>Connect Supabase</h2>
-<label>Project URL</label>
-<input id="url" placeholder="https://YOUR-PROJECT.supabase.co">
-<label>Publishable key (or legacy anon key)</label>
-<input id="key" type="password" placeholder="Your public client key">
-<button id="connect">Connect</button>
-<p id="msg" role="status"></p>
-</section>
+  <section class="card" id="setup">
+    <h2>Connect Supabase</h2>
+    <p class="muted">Use your Crave project URL and public publishable/anon key only. Never enter a service-role or secret key here.</p>
+    <label for="url">Project URL</label>
+    <input id="url" inputmode="url" autocomplete="url" placeholder="https://YOUR-PROJECT.supabase.co">
+    <label for="key">Publishable key (or legacy anon key)</label>
+    <input id="key" type="password" autocomplete="off" placeholder="Your public client key">
+    <button id="connect">Connect</button>
+    <p id="msg" class="status" role="status" aria-live="polite"></p>
+  </section>
 
-<section class="card" id="login" hidden>
-<h2>Admin sign in</h2>
-<label>Email</label>
-<input id="email" type="email" autocomplete="username">
-<label>Password</label>
-<input id="password" type="password" autocomplete="current-password">
-<button id="signin">Sign in</button>
-<p id="loginmsg" role="status"></p>
-</section>
+  <section class="card" id="login" hidden>
+    <h2>Admin sign in</h2>
+    <p class="muted">Sign in with the administrator account already added to Crave.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <button id="signin">Sign in</button>
+    <button id="back" class="secondary">Back</button>
+    <p id="loginmsg" class="status" role="status" aria-live="polite"></p>
+  </section>
 
-<section id="dashboard" hidden>
-<div class="card">
-<h2>Pending verification submissions</h2>
-<p id="who" class="muted"></p>
-<button id="refresh">Refresh queue</button>
-<button id="logout">Sign out</button>
-<p id="status" role="status"></p>
-</div>
-<div id="queue"></div>
-</section>
+  <section id="dashboard" hidden>
+    <div class="card">
+      <h2>Pending verification submissions</h2>
+      <p id="who" class="muted"></p>
+      <button id="refresh">Refresh queue</button>
+      <button id="logout" class="secondary">Sign out</button>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </div>
+    <div id="queue"></div>
+  </section>
 </main>
-
 <script>
-let project='',key='',token='',userEmail='';
-const $=id=>document.getElementById(id);
-const message=(id,text)=>$(id).textContent=text;
+'use strict';
+let project = '', apiKey = '', accessToken = '', userEmail = '';
+const $ = id => document.getElementById(id);
+const say = (id, text) => { $(id).textContent = text; };
 
-async function request(path,options={}){
- const headers={'apikey':key,'Content-Type':'application/json'};
- if(options.auth)headers.Authorization='Bearer '+token;
- const response=await fetch(project.replace(/\/$/,'')+path,{
-  method:options.method||'GET',headers,
-  body:options.body?JSON.stringify(options.body):undefined
- });
- const text=await response.text();
- let data;
- try{data=text?JSON.parse(text):null}catch{data=null}
- if(!response.ok)throw Error(data?.message||data?.msg||data?.error_description||text||'Request failed: '+response.status);
- return data;
-}
-
-$('connect').onclick=async()=>{
- project=$('url').value.trim();
- key=$('key').value.trim();
- if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(project)||!key){
-  message('msg','Enter a valid project URL and publishable/anon key.');return;
- }
- $('connect').disabled=true;
- try{
-  await request('/rest/v1/yap_verification_submissions?select=id&limit=1');
-  $('setup').hidden=true;
-  $('login').hidden=false;
-  message('loginmsg','Connected. Sign in with your Crave administrator account.');
- }catch(e){message('msg','Connection failed: '+e.message)}
- finally{$('connect').disabled=false}
-};
-
-$('signin').onclick=async()=>{
- $('signin').disabled=true;
- try{
-  const result=await request('/auth/v1/token?grant_type=password',{
-   method:'POST',
-   body:{email:$('email').value.trim(),password:$('password').value}
-  });
-  token=result.access_token;
-  userEmail=result.user?.email||$('email').value.trim();
-  await loadQueue();
-  $('login').hidden=true;
-  $('dashboard').hidden=false;
-  $('who').textContent='Signed in: '+userEmail;
-  message('status','Signed in. Admin access is enforced by Supabase.');
-  $('password').value='';
- }catch(e){
-  token='';
-  message('loginmsg','Sign-in or access failed: '+e.message);
- }finally{$('signin').disabled=false}
-};
-
-function escapeHTML(value){
- return String(value??'—').replace(/[&<>"']/g,c=>({
-  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
- })[c]);
-}
-
-async function loadQueue(){
- message('status','Loading pending submissions…');
- $('queue').innerHTML='';
- try{
-  const rows=await request(
-   '/rest/v1/yap_verification_submissions?select=id,yap_id,method,receipt_reference,accuracy_m,submitted_latitude,submitted_longitude,status,created_at&status=eq.pending&order=created_at.desc',
-   {auth:true}
-  );
-  if(!rows.length){
-   $('queue').innerHTML='<div class="card">No pending submissions.</div>';
-   message('status','Queue loaded.');
-   return;
+function normalizeProjectUrl(value) {
+  const input = value.trim().replace(/\/+$/, '');
+  let parsed;
+  try { parsed = new URL(input); } catch { throw new Error('Enter a valid Supabase project URL.'); }
+  if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.supabase.co') ||
+      parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== '/') {
+    throw new Error('Use the HTTPS Project URL shown in Supabase → Project Settings → API.');
   }
-
-  const ids=[...new Set(rows.map(r=>r.yap_id).filter(Boolean))];
-  const query=ids.map(id=>'"'+id+'"').join(',');
-  const yaps=await request(
-   '/rest/v1/yaps?select=id,restaurant,dish,area,note,verification_level,verification_status&id=in.('+query+')',
-   {auth:true}
-  );
-  const byId=new Map(yaps.map(y=>[y.id,y]));
-
-  $('queue').innerHTML=rows.map(r=>{
-   const y=byId.get(r.yap_id)||{};
-   const isTest=String(r.receipt_reference||'').toUpperCase().startsWith('TEST-');
-   return '<article class="card"><h2>'+
-    escapeHTML(y.dish)+' — '+escapeHTML(y.restaurant)+'</h2>'+
-    '<p>Area: '+escapeHTML(y.area)+'</p>'+
-    '<p>Method: '+escapeHTML(r.method)+'</p>'+
-    '<p>Receipt reference: '+escapeHTML(r.receipt_reference)+'</p>'+
-    '<p>GPS accuracy: '+escapeHTML(r.accuracy_m==null?'Not supplied':r.accuracy_m+' m')+'</p>'+
-    '<p>Coordinates: '+escapeHTML(r.submitted_latitude==null?'Not supplied':r.submitted_latitude+', '+r.submitted_longitude)+'</p>'+
-    '<p>Current level: '+escapeHTML(y.verification_level)+' ('+escapeHTML(y.verification_status)+')</p>'+
-    '<p>Note: '+escapeHTML(y.note)+'</p>'+
-    (isTest?'<p class="notice">Test reference: approval disabled.</p>':'')+
-    '<button data-id="'+escapeHTML(r.id)+'" data-decision="approved" '+(isTest?'disabled':'')+'>Approve evidence</button>'+
-    '<button class="reject" data-id="'+escapeHTML(r.id)+'" data-decision="rejected">Reject</button>'+
-    '</article>';
-  }).join('');
-  message('status',rows.length+' pending submission(s). Review evidence carefully.');
- }catch(e){
-  message('status','Could not load queue: '+e.message);
- }
+  return parsed.origin;
 }
 
-$('queue').addEventListener('click',async event=>{
- const button=event.target.closest('button[data-decision]');
- if(!button)return;
- const decision=button.dataset.decision;
- if(!confirm('Confirm '+decision+' for this submission?'))return;
- button.disabled=true;
- try{
-  await request('/rest/v1/rpc/review_yap_verification',{
-   method:'POST',auth:true,
-   body:{
-    p_submission_id:button.dataset.id,
-    p_decision:decision
-   }
+async function api(path, options = {}) {
+  const headers = { apikey: apiKey, 'Content-Type': 'application/json' };
+  if (options.auth && accessToken) headers.Authorization = 'Bearer ' + accessToken;
+  const response = await fetch(project + path, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body)
   });
-  message('status','Review saved.');
-  await loadQueue();
- }catch(e){
-  message('status','Review failed: '+e.message);
-  button.disabled=false;
- }
+  const raw = await response.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch {}
+  if (!response.ok) {
+    const message = data?.msg || data?.message || data?.error_description || data?.error || raw || ('HTTP ' + response.status);
+    throw new Error(message);
+  }
+  return data;
+}
+
+$('connect').addEventListener('click', async () => {
+  let nextProject, nextKey;
+  try {
+    nextProject = normalizeProjectUrl($('url').value);
+    nextKey = $('key').value.trim();
+    if (!nextKey) throw new Error('Paste your public publishable/anon key.');
+  } catch (error) { say('msg', error.message); return; }
+
+  $('connect').disabled = true;
+  say('msg', 'Checking the Supabase endpoint…');
+  project = nextProject;
+  apiKey = nextKey;
+  try {
+    // Use Auth settings endpoint as a connectivity check; do not query private evidence anonymously.
+    await api('/auth/v1/settings');
+    $('setup').hidden = true;
+    $('login').hidden = false;
+    $('email').focus();
+    say('loginmsg', 'Connected. Sign in with your Crave administrator account.');
+  } catch (error) {
+    say('msg', 'Connection failed: ' + error.message + '\nCheck that the URL and public key belong to the same Crave project.');
+  } finally { $('connect').disabled = false; }
 });
 
-$('refresh').onclick=loadQueue;
-$('logout').onclick=async()=>{
- try{await request('/auth/v1/logout',{method:'POST',auth:true})}catch{}
- token='';
- $('dashboard').hidden=true;
- $('login').hidden=false;
- message('loginmsg','Signed out.');
-};
+$('back').addEventListener('click', () => {
+  accessToken = '';
+  $('login').hidden = true;
+  $('setup').hidden = false;
+  say('msg', 'You can change the project URL or public key.');
+});
+
+$('signin').addEventListener('click', async () => {
+  const email = $('email').value.trim();
+  const password = $('password').value;
+  if (!email || !password) { say('loginmsg', 'Enter your admin email and password.'); return; }
+  $('signin').disabled = true;
+  say('loginmsg', 'Signing in…');
+  try {
+    const result = await api('/auth/v1/token?grant_type=password', {
+      method: 'POST', body: { email, password }
+    });
+    if (!result?.access_token) throw new Error('Supabase did not return a sign-in token.');
+    accessToken = result.access_token;
+    userEmail = result.user?.email || email;
+    // Test admin-only access before showing the dashboard.
+    await api('/rest/v1/yap_verification_submissions?select=id&limit=1', { auth: true });
+    $('login').hidden = true;
+    $('dashboard').hidden = false;
+    $('who').textContent = 'Signed in: ' + userEmail;
+    $('password').value = '';
+    await loadQueue();
+  } catch (error) {
+    accessToken = '';
+    say('loginmsg', 'Sign-in/access failed: ' + error.message + '\nIf the password is correct, confirm this account has an entry in public.crave_admins.');
+  } finally { $('signin').disabled = false; }
+});
+
+function esc(value) {
+  return String(value ?? '—').replace(/[&<>"']/g, char => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[char]);
+}
+
+async function loadQueue() {
+  say('status', 'Loading pending submissions…');
+  $('refresh').disabled = true;
+  $('queue').replaceChildren();
+  try {
+    const rows = await api(
+      '/rest/v1/yap_verification_submissions?select=id,yap_id,method,receipt_reference,accuracy_m,submitted_latitude,submitted_longitude,status,created_at&status=eq.pending&order=created_at.desc',
+      { auth: true }
+    );
+    if (!Array.isArray(rows)) throw new Error('Unexpected response from verification submissions table.');
+    if (rows.length === 0) {
+      const empty = document.createElement('article');
+      empty.className = 'card';
+      empty.textContent = 'No pending submissions.';
+      $('queue').append(empty);
+      say('status', 'Queue loaded.');
+      return;
+    }
+
+    const ids = [...new Set(rows.map(row => row.yap_id).filter(Boolean))];
+    const query = ids.map(id => '"' + String(id).replace(/"/g, '') + '"').join(',');
+    const yaps = ids.length ? await api(
+      '/rest/v1/yaps?select=id,restaurant,dish,area,note,verification_level,verification_status&id=in.(' + encodeURIComponent(query) + ')',
+      { auth: true }
+    ) : [];
+    const byId = new Map(yaps.map(yap => [yap.id, yap]));
+
+    for (const row of rows) {
+      const yap = byId.get(row.yap_id) || {};
+      const isTestReceipt = String(row.receipt_reference || '').toUpperCase().startsWith('TEST-');
+      const article = document.createElement('article');
+      article.className = 'card';
+
+      const heading = document.createElement('h2');
+      heading.textContent = (yap.dish || 'Unknown dish') + ' — ' + (yap.restaurant || 'Unknown venue');
+      article.append(heading);
+
+      const fields = [
+        ['Area', yap.area],
+        ['Method', row.method],
+        ['Receipt reference', row.receipt_reference],
+        ['GPS accuracy', row.accuracy_m == null ? 'Not supplied' : row.accuracy_m + ' m'],
+        ['Coordinates', row.submitted_latitude == null ? 'Not supplied' : row.submitted_latitude + ', ' + row.submitted_longitude],
+        ['Current verification', (yap.verification_level || 'unverified') + ' (' + (yap.verification_status || 'unknown') + ')'],
+        ['Note', yap.note],
+        ['Submitted', row.created_at ? new Date(row.created_at).toLocaleString() : 'Unknown']
+      ];
+      for (const [label, value] of fields) {
+        const p = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = label + ': ';
+        p.append(strong, document.createTextNode(String(value ?? '—')));
+        article.append(p);
+      }
+
+      if (isTestReceipt) {
+        const warning = document.createElement('p');
+        warning.className = 'notice';
+        warning.textContent = 'Test reference: approval is disabled for this submission.';
+        article.append(warning);
+      } else if (row.method === 'receipt' && !row.receipt_reference) {
+        const warning = document.createElement('p');
+        warning.className = 'notice';
+        warning.textContent = 'No receipt reference supplied. Do not approve until genuine evidence is checked.';
+        article.append(warning);
+      }
+
+      const approve = document.createElement('button');
+      approve.textContent = 'Approve evidence';
+      approve.disabled = isTestReceipt;
+      approve.dataset.id = row.id;
+      approve.dataset.decision = 'approved';
+      const reject = document.createElement('button');
+      reject.textContent = 'Reject';
+      reject.className = 'reject';
+      reject.dataset.id = row.id;
+      reject.dataset.decision = 'rejected';
+      article.append(approve, reject);
+      $('queue').append(article);
+    }
+    say('status', rows.length + ' pending submission(s). Approve only after manually verifying genuine evidence.');
+  } catch (error) {
+    say('status', 'Could not load queue: ' + error.message);
+  } finally { $('refresh').disabled = false; }
+}
+
+$('queue').addEventListener('click', async event => {
+  const button = event.target.closest('button[data-decision]');
+  if (!button) return;
+  const decision = button.dataset.decision;
+  if (decision === 'approved' && !confirm('Confirm you personally checked the genuine evidence and want to approve this submission?')) return;
+  if (decision === 'rejected' && !confirm('Reject this verification submission?')) return;
+  button.disabled = true;
+  try {
+    await api('/rest/v1/rpc/review_yap_verification', {
+      method: 'POST', auth: true,
+      body: { p_submission_id: button.dataset.id, p_decision: decision }
+    });
+    say('status', 'Review saved.');
+    await loadQueue();
+  } catch (error) {
+    say('status', 'Review failed: ' + error.message);
+    button.disabled = false;
+  }
+});
+
+$('refresh').addEventListener('click', loadQueue);
+$('logout').addEventListener('click', async () => {
+  try { await api('/auth/v1/logout', { method: 'POST', auth: true }); } catch {}
+  accessToken = '';
+  userEmail = '';
+  $('dashboard').hidden = true;
+  $('login').hidden = false;
+  say('loginmsg', 'Signed out.');
+});
 </script>
 </body>
 </html>
