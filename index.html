@@ -278,16 +278,15 @@ function renderTrends() {
         : b.delta - a.delta
   );
 
-  const root = document.getElementById('trendList');
+  
+const root = document.getElementById('trendList');
+
 if (!list.length) {
   root.innerHTML =
     '<div class="empty">No dishes match those filters. Try another area or signal.</div>';
   return;
-}  root.innerHTML = !hasEligibleTrend && liveTrendRows.length
-      ? '<div class="empty">No trends have reached 3 reports in the last 7 days yet. Early signals remain available in Explore.</div>'
-      : '<div class="empty">No dishes match those filters. Try another area or signal.</div>';
-    return;
-  }
+}
+
 
   root.innerHTML = list.map(t => `
     <article class="trend" onclick="openDetail('${t.id}')">
