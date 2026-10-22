@@ -613,6 +613,24 @@ function updateClock(){document.getElementById('clock').textContent='Demo · '+n
     <p>Location access is optional. You can always choose an area manually.</p>
   </section>
 </div>
+  
+<script>
+window.addEventListener('load', async function () {
+  if (!navigator.geolocation || !navigator.permissions?.query) return;
+
+  try {
+    const permission = await navigator.permissions.query({
+      name: 'geolocation'
+    });
+
+    if (permission.state === 'granted') {
+      detectCraveLocation();
+    }
+  } catch (error) {
+    // If permission cannot be checked, keep manual location selection.
+  }
+});
+</script>
 </body></html>
 
 
