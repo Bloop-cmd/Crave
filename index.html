@@ -300,7 +300,18 @@ if (!list.length) {
           ${momentIcon(t.momentum)} ${t.momentum}
         </span>
       </div>
-      <div class="trendreason">${esc(t.why)}</div>
+      <div class="trendreason">
+  ${esc(t.why)}
+  <div class="meta" style="margin-top:6px">
+    ${t.live
+      ? (t.visits === 1
+          ? 'Early signal · 1 report'
+          : t.visits === 2
+            ? 'Emerging signal · 2 reports'
+            : 'More activity · ' + t.visits + ' reports')}
+    ${t.live ? ' · Not independently deduplicated' : ''}
+  </div>
+</div>
       <div class="metrics">
         <div class="metric">
           <b>${t.visits}</b>
