@@ -254,7 +254,106 @@ function setArea(area,el){selectedArea=area;document.querySelectorAll('#areaFilt
 function setMomentum(momentum,el){selectedMomentum=momentum;document.querySelectorAll('#momentumFilters .chip').forEach(b=>b.classList.toggle('active',b===el));renderTrends()}
 function resetFilters(){selectedArea='All areas';selectedMomentum='All';document.querySelectorAll('#areaFilters .chip').forEach(b=>b.classList.toggle('active',b.dataset.area==='All areas'));document.querySelectorAll('#momentumFilters .chip').forEach(b=>b.classList.toggle('active',b.dataset.momentum==='All'));document.getElementById('searchInput').value='';document.getElementById('sortSelect').value='momentum';renderTrends()}
 function getTrends(){if(liveTrendRows.length){return liveTrendRows.map(r=>{const trustedReports=Number(r.gold_reports||0)+Number(r.blue_reports||0),unverifiedReports=Number(r.unverified_reports||0),label=r.momentum_label==='Steady'?'Stable':r.momentum_label==='No recent signal'?'Fading':r.momentum_label;return {id:'live-'+String(r.dish_key||r.dish||'dish').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+String(r.area||'area').toLowerCase().replace(/[^a-z0-9]+/g,'-'),dish:r.dish,emoji:'🍽️',area:r.area,restaurants:[r.restaurant],momentum:label,visits:Number(r.recent_reports||0),cravings:0,positive:trustedReports,negative:0,votes:0,delta:Number(r.momentum_change_pct||0),confidence:'Low',price:'Price not reported',why:`${Number(r.recent_reports||0)} community reports in the last 7 days. ${trustedReports} have an approved Gold or Blue verification. Confidence stays low until independent accounts can be deduplicated.`,notes:'Live community signals from Crave submissions.',live:true,trustedReports,unverifiedReports,extraYaps:0}}).filter(t=>t.visits>0&&t.momentum!=='Fading'||t.visits>0)}return demoTrends.map(t=>({...t,extraYaps:[...yaps,...remoteYaps].filter(y=>(y.dish||'').toLowerCase()===t.dish.toLowerCase()||(y.dish||'').toLowerCase()===t.id).length,live:false}))}
-function renderTrends(){let list=getTrends(),q=document.getElementById('searchInput').value.trim().toLowerCase(),sort=document.getElementById('sortSelect').value;list=list.filter(t=>(selectedArea==='All areas'||t.area===selectedArea)&&(selectedMomentum==='All'||t.momentum===selectedMomentum)&&(!q||[t.dish,t.area,...t.restaurants].join(' ').toLowerCase().includes(q)));list.sort((a,b)=>sort==='visits'?b.visits-a.visits:sort==='confidence'?({High:3,Medium:2,Low:1}[b.confidence]-{High:3,Medium:2,Low:1}[a.confidence]):b.delta-a.delta);const root=document.getElementById('trendList');if(!list.length){root.innerHTML='<div class="empty">No dishes match those filters. Try another area or signal.</div>';return}root.innerHTML=list.map(t=>`<article class="trend" onclick="openDetail('${t.id}')"><div class="trendtop"><div class="foodicon">${t.emoji}</div><div class="trendmain"><div class="trendname">${esc(t.dish)}</div><div class="meta">⌖ ${esc(t.area)} · ${esc(t.price)}</div></div><span class="momentum ${t.momentum.toLowerCase()}">${momentIcon(t.momentum)} ${t.momentum}</span></div><div class="trendreason">${esc(t.why)}</div><div class="metrics"><div class="metric"><b>${t.visits}</b><span>${t.live?'Recent reports':'Sample visits'}</span></div><div class="metric"><b>${t.live?t.trustedReports:t.cravings}</b><span>${t.live?'Gold + Blue ticks':'Cravings'}</span></div><div class="metric"><b>${t.live?t.unverifiedReports:((t.positive-t.negative>0?'+':'')+(t.positive-t.negative))}</b><span>${t.live?'Unverified reports':'Net feedback'}</span></div></div><div class="trendfoot"><span class="confidence">Confidence: ${t.confidence} · ${t.live?'live community data':'illustrative data'}</span><button class="linkbtn" onclick="event.stopPropagation();openDetail('${t.id}')">See signal ↗</button></div><div class="mini-actions"><button class="action primary" onclick="event.stopPropagation();openDetail('${t.id}')">Explore dish</button><button class="action" onclick="event.stopPropagation();toggleSave('${t.id}')">${saved.includes(t.id)?'✓ Saved':'＋ Save'}</button><button class="action" onclick="event.stopPropagation();shareTrend('${t.id}')">↗ Share</button></div></article>`).join('')}
+
+function renderTrends() {
+  let list = getTrends();
+
+  // Keep live trends with at least 3 reports in the main Trends list.
+  // Lower-volume reports remain available through Explore.
+  if (liveTrendRows.length) {
+    list = list.filter(t => !t.live || t.visits >= 3);
+  }
+
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sort = document.getElementById('sortSelect').value;
+
+  list = list.filter(t =>
+    (selectedArea === 'All areas' || t.area === selectedArea) &&
+    (selectedMomentum === 'All' || t.momentum === selectedMomentum) &&
+    (!q || [t.dish, t.area, ...t.restaurants]
+      .join(' ')
+      .toLowerCase()
+      .includes(q))
+  );
+
+  list.sort((a, b) =>
+    sort === 'visits'
+      ? b.visits - a.visits
+      : sort === 'confidence'
+        ? ({ High: 3, Medium: 2, Low: 1 }[b.confidence] -
+           { High: 3, Medium: 2, Low: 1 }[a.confidence])
+        : b.delta - a.delta
+  );
+
+  const root = document.getElementById('trendList');
+
+  if (!list.length) {
+    const hasEligibleTrend = getTrends().some(
+      t => t.live && t.visits >= 3
+    );
+
+    root.innerHTML = !hasEligibleTrend && liveTrendRows.length
+      ? '<div class="empty">No trends have reached 3 reports in the last 7 days yet. Early signals remain available in Explore.</div>'
+      : '<div class="empty">No dishes match those filters. Try another area or signal.</div>';
+    return;
+  }
+
+  root.innerHTML = list.map(t => `
+    <article class="trend" onclick="openDetail('${t.id}')">
+      <div class="trendtop">
+        <div class="foodicon">${t.emoji}</div>
+        <div class="trendmain">
+          <div class="trendname">${esc(t.dish)}</div>
+          <div class="meta">⌖ ${esc(t.area)} · ${esc(t.price)}</div>
+        </div>
+        <span class="momentum ${t.momentum.toLowerCase()}">
+          ${momentIcon(t.momentum)} ${t.momentum}
+        </span>
+      </div>
+      <div class="trendreason">${esc(t.why)}</div>
+      <div class="metrics">
+        <div class="metric">
+          <b>${t.visits}</b>
+          <span>${t.live ? 'Recent reports' : 'Sample visits'}</span>
+        </div>
+        <div class="metric">
+          <b>${t.live ? t.trustedReports : t.cravings}</b>
+          <span>${t.live ? 'Gold + Blue ticks' : 'Cravings'}</span>
+        </div>
+        <div class="metric">
+          <b>${t.live ? t.unverifiedReports :
+            ((t.positive - t.negative > 0 ? '+' : '') +
+            (t.positive - t.negative))}</b>
+          <span>${t.live ? 'Unverified reports' : 'Net feedback'}</span>
+        </div>
+      </div>
+      <div class="trendfoot">
+        <span class="confidence">
+          Confidence: ${t.confidence} ·
+          ${t.live ? 'live community data' : 'illustrative data'}
+        </span>
+        <button class="linkbtn"
+          onclick="event.stopPropagation();openDetail('${t.id}')">
+          See signal ↗
+        </button>
+      </div>
+      <div class="mini-actions">
+        <button class="action primary"
+          onclick="event.stopPropagation();openDetail('${t.id}')">
+          Explore dish
+        </button>
+        <button class="action"
+          onclick="event.stopPropagation();toggleSave('${t.id}')">
+          ${saved.includes(t.id) ? '✓ Saved' : '＋ Save'}
+        </button>
+        <button class="action"
+          onclick="event.stopPropagation();shareTrend('${t.id}')">
+          ↗ Share
+        </button>
+      </div>
+    </article>
+  `).join('');
+}
 function momentIcon(m){return {Rising:'↗',Peaking:'✦',Emerging:'✧',Cooling:'↘',Fading:'↓',Stable:'→'}[m]||'•'}
 function openDetail(id){const t=getTrends().find(x=>x.id===id);if(!t)return;currentDetail=id;const recent=(t.live?[]:demoPosts.filter(p=>p.dish.toLowerCase()===t.dish.toLowerCase())).concat([...yaps,...remoteYaps].filter(p=>(p.dish||'').toLowerCase()===t.dish.toLowerCase()),[...scoutReports,...remoteScoutReports].filter(p=>(p.dish||'').toLowerCase()===t.dish.toLowerCase()&&(p.status==='Approved'||p.status==='approved'))); document.getElementById('detailContent').innerHTML=`<div class="modalhead"><div><div class="eyebrow">${t.live?'Live community signal':'Dish signal · demo data'}</div><h2>${t.emoji} ${esc(t.dish)}</h2><div class="meta">⌖ ${esc(t.area)} · ${esc(t.price)}</div></div><button class="close" onclick="closeDetail()" aria-label="Close">×</button></div><div style="display:flex;gap:8px;align-items:center;margin:16px 0"><span class="momentum ${t.momentum.toLowerCase()}">${momentIcon(t.momentum)} ${t.momentum}</span><span class="badge">${t.confidence} confidence</span></div><p style="font-size:13px;color:#55574F">${esc(t.why)}</p><div class="sectionhead"><div><h2>Signal breakdown</h2><p>${t.live?'Reports from the previous 7 days vs the last 7 days':'Illustrative counts only'}</p></div></div><div class="metrics"><div class="metric"><b>${t.visits}</b><span>${t.live?'Recent reports':'Sample visits'}</span></div><div class="metric"><b>${t.live?t.trustedReports:t.cravings}</b><span>${t.live?'Gold + Blue ticks':'Cravings'}</span></div><div class="metric"><b>${t.live?t.unverifiedReports:t.votes}</b><span>${t.live?'Unverified reports':'Group votes'}</span></div><div class="metric"><b>${t.live?t.trustedReports:t.positive}</b><span>${t.live?'Verified reports':'Positive signals'}</span></div><div class="metric"><b>${t.live?'—':t.negative}</b><span>${t.live?'Negative signals not separated yet':'Skip signals'}</span></div><div class="metric"><b>${t.delta>0?'+':''}${t.delta}${t.live?'%':'%'}</b><span>Activity change*</span></div></div><div class="source-note">${t.live?'Live trend summary uses recency-weighted community reports. Confidence remains low because account-level duplicate detection is not yet connected.':'*Demo momentum value. Visit counts must only be called verified when verification criteria are met.'}</div><div class="sectionhead"><div><h2>Where to try it</h2><p>Directory examples; confirm current menus and opening status.</p></div></div>${t.restaurants.map(r=>`<div class="post"><div class="posttop"><span>${esc(r)}</span><span class="tiny">${esc(t.area)}</span></div><div class="meta">Menu and availability not live-connected</div></div>`).join('')}<div class="sectionhead"><div><h2>Crave read</h2><p>Context, not a guarantee</p></div></div><p style="font-size:12px;color:#55574F">${esc(t.notes)}</p><div class="mini-actions"><button class="action primary" onclick="toggleSave('${t.id}');openDetail('${t.id}')">${saved.includes(t.id)?'✓ Saved to Explore':'＋ Save trend'}</button><button class="action" onclick="shareTrend('${t.id}')">↗ Share</button><button class="action" onclick="prefillYap('${t.dish}','${t.area}')">Post a Yap</button></div><div class="source-note">${recent.length?recent.map(p=>`<div class="post"><div class="posttop"><span>${esc(p.restaurant||'Community signal')}</span><span class="badge ${p.status==='Approved scout signal'?'approved':(p.verified?'':'unverified')}">${esc(p.status||p.signal||'Community report')}</span></div><p>${esc(p.note||'No additional note.')}</p></div>`).join(''):'No community Yaps for this dish yet in this browser.'}</div>`;document.getElementById('detailModal').classList.add('show');document.body.style.overflow='hidden'}function closeDetail(){document.getElementById('detailModal').classList.remove('show');document.body.style.overflow=''}
 function toggleSave(id){saved=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];writeStore('craveSaved',saved);renderTrends();renderExplore();showToast(saved.includes(id)?'Trend saved on this device.':'Removed from saved trends.')}async function shareTrend(id){const t=demoTrends.find(x=>x.id===id);const msg=`Crave trend: ${t.dish} · ${t.area}. ${t.momentum} (illustrative demo data).`;try{if(navigator.share)await navigator.share({title:'Crave Food Pulse',text:msg});else if(navigator.clipboard){await navigator.clipboard.writeText(msg);showToast('Trend summary copied.')}else showToast(msg)}catch(e){if(e.name!=='AbortError')showToast('Share unavailable on this browser.')}}
