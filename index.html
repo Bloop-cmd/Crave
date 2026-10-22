@@ -472,9 +472,39 @@ function detectCraveLocation() {
           return;
         }
 
-        window.craveDetectedLocality = locality;
-        status.textContent = 'Detected locality: ' + locality;
-        showToast('Locality detected: ' + locality);
+        
+window.craveDetectedLocality = locality;
+status.textContent = 'Detected: ' + locality + '. Tap below to use this area.';
+
+let detectedButton = document.getElementById('detectedLocalityButton');
+
+if (!detectedButton) {
+  detectedButton = document.createElement('button');
+  detectedButton.id = 'detectedLocalityButton';
+  detectedButton.type = 'button';
+  detectedButton.className = 'location-option';
+
+  const picker = document.querySelector('.location-sheet');
+  const gpsButton = picker?.querySelector(
+    '[onclick="detectCraveLocation()"]'
+  );
+
+  if (gpsButton) {
+    gpsButton.insertAdjacentElement('afterend', detectedButton);
+  }
+}
+
+detectedButton.innerHTML =
+  '<span class="loc-icon">📍</span>' +
+  '<span><strong>Use ' + locality.replace(/[&<>"']/g, '') +
+  '</strong><small>Locality detected from your GPS</small></span>' +
+  '<span class="loc-check">›</span>';
+
+detectedButton.onclick = function() {
+  chooseArea(locality);
+};
+
+showToast('Locality detected: ' + locality);
       } catch (error) {
         status.textContent =
           'GPS works, but locality lookup failed. Please choose manually.';
