@@ -349,38 +349,65 @@ function cycleArea() {
   chooseArea(selected);
 }
 
-function chooseArea(selected) {
-  const validAreas = [
-    'Hyderabad',
-    'HITEC City',
-    'Madhapur',
-    'Gachibowli',
-    'Kondapur'
-  ];
 
-  if (!validAreas.includes(selected)) return;
+function chooseArea(selected) {
+  if (!selected || !selected.trim()) return;
+
+  selected = selected.trim();
+
+  const isHyderabad = selected === 'Hyderabad';
+  selectedArea = isHyderabad ? 'All areas' : selected;
 
   document.getElementById('areaLabel').textContent =
-    selected === 'Hyderabad' ? 'Hyderabad' : selected;
+    isHyderabad ? 'Hyderabad' : selected;
 
-  selectedArea =
-    selected === 'Hyderabad' ? 'All areas' : selected;
+  // Keep existing filters working and add newly detected localities.
+  const filters = document.getElementById('areaFilters');
 
-  document.querySelectorAll('#areaFilters .chip').forEach(button => {
-    button.classList.toggle(
-      'active',
-      button.dataset.area === selectedArea
-    );
-  });
+  if (filters && !isHyderabad) {
+    let chip = [...filters.querySelectorAll('.chip')]
+      .find(button => button.dataset.area === selected);
 
+    if (!chip) {
+      chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip';
+      chip.dataset.area = selected;
+      chip.textContent = selected;
+      chip.onclick = function() {
+        setArea(selected, chip);
+      };
+      filters.appendChild(chip);
+    }
+
+    filters.querySelectorAll('.chip').forEach(button => {
+      button.classList.toggle('active', button === chip);
+    });
+  } else if (filters) {
+    filters.querySelectorAll('.chip').forEach(button => {
+      button.classList.toggle(
+        'active',
+        button.dataset.area === 'All areas'
+      );
+    });
+  }
+
+  // Make the selected locality available in the Yap form.
   const yapArea = document.getElementById('yapArea');
 
-  if (selectedArea !== 'All areas' && yapArea) {
-    const option = [...yapArea.options].find(
-      item => item.textContent === selectedArea
+  if (yapArea && !isHyderabad) {
+    let option = [...yapArea.options].find(
+      item => item.textContent.trim() === selected
     );
 
-    if (option) yapArea.value = option.value;
+    if (!option) {
+      option = document.createElement('option');
+      option.value = selected;
+      option.textContent = selected;
+      yapArea.appendChild(option);
+    }
+
+    yapArea.value = option.value;
   }
 
   renderTrends();
@@ -392,10 +419,7 @@ function chooseArea(selected) {
   }
 
   showToast('Location updated: ' + selected);
-} 
-  ;
-
-
+}
 function detectCraveLocation() {
   const status = document.getElementById('craveLocationStatus');
 
