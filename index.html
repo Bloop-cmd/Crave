@@ -199,7 +199,19 @@ body{background:var(--bg);color:#fff8e9;background-image:radial-gradient(#45419a
 </section>
 <section class="screen" id="screen-explore">
 <div class="hero"><div class="eyebrow">Go beyond the usual</div><h1>Follow the<br><span style="color:var(--lime)">craving.</span></h1><p>Find a dish, inspect its evidence, and decide whether it deserves your next meal.</p></div>
-<div class="formcard"><h3>Explore a dish</h3><p>Choose a trend below to open its detail page, see the signal breakdown and save it for later.</p><button class="btnwide" onclick="switchScreen('pulse')">Browse Hyderabad Food Pulse ↗</button></div>
+
+<div class="formcard">
+  <h3>Find your next craving</h3>
+  <p>Search dishes, discover food trends and open a dish to inspect its signals.</p>
+  <div class="field">
+    <label for="exploreSearch">Search dishes</label>
+    <input id="exploreSearch"
+           type="search"
+           placeholder="Try biryani, mandi, dosa…"
+           oninput="renderExplore()">
+  </div>
+  <div id="exploreResults"></div>
+</div>
 <div class="sectionhead"><div><h2>Saved trends</h2><p>Kept on this device</p></div></div><div id="savedList"></div>
 <div class="sectionhead"><div><h2>Recent community signals</h2><p>Demo posts and scout submissions</p></div></div><div id="recentPosts"></div>
 </section>
