@@ -258,7 +258,91 @@ function renderTrends(){let list=getTrends(),q=document.getElementById('searchIn
 function momentIcon(m){return {Rising:'↗',Peaking:'✦',Emerging:'✧',Cooling:'↘',Fading:'↓',Stable:'→'}[m]||'•'}
 function openDetail(id){const t=getTrends().find(x=>x.id===id);if(!t)return;currentDetail=id;const recent=(t.live?[]:demoPosts.filter(p=>p.dish.toLowerCase()===t.dish.toLowerCase())).concat([...yaps,...remoteYaps].filter(p=>(p.dish||'').toLowerCase()===t.dish.toLowerCase()),[...scoutReports,...remoteScoutReports].filter(p=>(p.dish||'').toLowerCase()===t.dish.toLowerCase()&&(p.status==='Approved'||p.status==='approved'))); document.getElementById('detailContent').innerHTML=`<div class="modalhead"><div><div class="eyebrow">${t.live?'Live community signal':'Dish signal · demo data'}</div><h2>${t.emoji} ${esc(t.dish)}</h2><div class="meta">⌖ ${esc(t.area)} · ${esc(t.price)}</div></div><button class="close" onclick="closeDetail()" aria-label="Close">×</button></div><div style="display:flex;gap:8px;align-items:center;margin:16px 0"><span class="momentum ${t.momentum.toLowerCase()}">${momentIcon(t.momentum)} ${t.momentum}</span><span class="badge">${t.confidence} confidence</span></div><p style="font-size:13px;color:#55574F">${esc(t.why)}</p><div class="sectionhead"><div><h2>Signal breakdown</h2><p>${t.live?'Reports from the previous 7 days vs the last 7 days':'Illustrative counts only'}</p></div></div><div class="metrics"><div class="metric"><b>${t.visits}</b><span>${t.live?'Recent reports':'Sample visits'}</span></div><div class="metric"><b>${t.live?t.trustedReports:t.cravings}</b><span>${t.live?'Gold + Blue ticks':'Cravings'}</span></div><div class="metric"><b>${t.live?t.unverifiedReports:t.votes}</b><span>${t.live?'Unverified reports':'Group votes'}</span></div><div class="metric"><b>${t.live?t.trustedReports:t.positive}</b><span>${t.live?'Verified reports':'Positive signals'}</span></div><div class="metric"><b>${t.live?'—':t.negative}</b><span>${t.live?'Negative signals not separated yet':'Skip signals'}</span></div><div class="metric"><b>${t.delta>0?'+':''}${t.delta}${t.live?'%':'%'}</b><span>Activity change*</span></div></div><div class="source-note">${t.live?'Live trend summary uses recency-weighted community reports. Confidence remains low because account-level duplicate detection is not yet connected.':'*Demo momentum value. Visit counts must only be called verified when verification criteria are met.'}</div><div class="sectionhead"><div><h2>Where to try it</h2><p>Directory examples; confirm current menus and opening status.</p></div></div>${t.restaurants.map(r=>`<div class="post"><div class="posttop"><span>${esc(r)}</span><span class="tiny">${esc(t.area)}</span></div><div class="meta">Menu and availability not live-connected</div></div>`).join('')}<div class="sectionhead"><div><h2>Crave read</h2><p>Context, not a guarantee</p></div></div><p style="font-size:12px;color:#55574F">${esc(t.notes)}</p><div class="mini-actions"><button class="action primary" onclick="toggleSave('${t.id}');openDetail('${t.id}')">${saved.includes(t.id)?'✓ Saved to Explore':'＋ Save trend'}</button><button class="action" onclick="shareTrend('${t.id}')">↗ Share</button><button class="action" onclick="prefillYap('${t.dish}','${t.area}')">Post a Yap</button></div><div class="source-note">${recent.length?recent.map(p=>`<div class="post"><div class="posttop"><span>${esc(p.restaurant||'Community signal')}</span><span class="badge ${p.status==='Approved scout signal'?'approved':(p.verified?'':'unverified')}">${esc(p.status||p.signal||'Community report')}</span></div><p>${esc(p.note||'No additional note.')}</p></div>`).join(''):'No community Yaps for this dish yet in this browser.'}</div>`;document.getElementById('detailModal').classList.add('show');document.body.style.overflow='hidden'}function closeDetail(){document.getElementById('detailModal').classList.remove('show');document.body.style.overflow=''}
 function toggleSave(id){saved=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];writeStore('craveSaved',saved);renderTrends();renderExplore();showToast(saved.includes(id)?'Trend saved on this device.':'Removed from saved trends.')}async function shareTrend(id){const t=demoTrends.find(x=>x.id===id);const msg=`Crave trend: ${t.dish} · ${t.area}. ${t.momentum} (illustrative demo data).`;try{if(navigator.share)await navigator.share({title:'Crave Food Pulse',text:msg});else if(navigator.clipboard){await navigator.clipboard.writeText(msg);showToast('Trend summary copied.')}else showToast(msg)}catch(e){if(e.name!=='AbortError')showToast('Share unavailable on this browser.')}}
-function renderExplore(){const root=document.getElementById('savedList');const list=demoTrends.filter(t=>saved.includes(t.id));root.innerHTML=list.length?list.map(t=>`<div class="post" onclick="openDetail('${t.id}')"><div class="posttop"><span>${t.emoji} ${esc(t.dish)}</span><span class="momentum ${t.momentum.toLowerCase()}">${t.momentum}</span></div><div class="meta">${t.area} · ${t.confidence} confidence</div></div>`).join(''):'<div class="empty">No saved trends yet. Save a dish from Pulse to keep it here.</div>';const approved=[...scoutReports.filter(r=>r.status==='Approved'),...remoteScoutReports].slice().reverse().map(r=>({...r,status:'Approved scout signal',time:r.submittedAt||r.created_at||'Shared report'}));document.getElementById('recentPosts').innerHTML=[...remoteYaps.slice().reverse(),...yaps.slice().reverse().slice(0,5),...approved,...demoPosts.slice(0,3)].map(p=>postCard(p)).join('')}
+
+function renderExplore() {
+  const searchInput = document.getElementById('exploreSearch');
+  const resultsRoot = document.getElementById('exploreResults');
+  const query = (searchInput?.value || '').trim().toLowerCase();
+
+  // Search across available live and demo trends.
+  if (resultsRoot) {
+    if (!query) {
+      resultsRoot.innerHTML =
+        '<div class="empty">Type a dish, restaurant or area to discover matching food trends.</div>';
+    } else {
+      const matches = getTrends().filter(t =>
+        [t.dish, t.area, ...(t.restaurants || [])]
+          .join(' ')
+          .toLowerCase()
+          .includes(query)
+      );
+
+      resultsRoot.innerHTML = matches.length
+        ? matches.slice(0, 10).map(t => `
+            <div class="post" role="button" tabindex="0"
+                 onclick="openDetail('${t.id}')">
+              <div class="posttop">
+                <span>${t.emoji || '🍽️'} ${esc(t.dish)}</span>
+                <span class="momentum ${t.momentum.toLowerCase()}">
+                  ${esc(t.momentum)}
+                </span>
+              </div>
+              <div class="meta">
+                📍 ${esc(t.area)} ·
+                ${t.live ? 'Live community data' : 'Illustrative demo data'}
+              </div>
+              <p>${esc((t.restaurants || []).join(' · '))}</p>
+              <div class="mini-actions">
+                <span class="linkbtn">View dish details ↗</span>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="empty">No matching dishes found. Try another dish, restaurant or area.</div>';
+    }
+  }
+
+  // Keep saved trends working.
+  const savedRoot = document.getElementById('savedList');
+  if (savedRoot) {
+    const list = getTrends().filter(t => saved.includes(t.id));
+
+    savedRoot.innerHTML = list.length
+      ? list.map(t => `
+          <div class="post" onclick="openDetail('${t.id}')">
+            <div class="posttop">
+              <span>${t.emoji || '🍽️'} ${esc(t.dish)}</span>
+              <span class="momentum ${t.momentum.toLowerCase()}">
+                ${esc(t.momentum)}
+              </span>
+            </div>
+            <div class="meta">
+              ${esc(t.area)} · ${esc(t.confidence)} confidence
+            </div>
+          </div>
+        `).join('')
+      : '<div class="empty">No saved trends yet. Save a dish to keep it here.</div>';
+  }
+
+  // Keep recent community signals working.
+  const recentRoot = document.getElementById('recentPosts');
+  if (recentRoot) {
+    const approved = [
+      ...scoutReports.filter(r => r.status === 'Approved'),
+      ...remoteScoutReports
+    ].slice().reverse().map(r => ({
+      ...r,
+      status: 'Approved scout signal',
+      time: r.submittedAt || r.created_at || 'Shared report'
+    }));
+
+    recentRoot.innerHTML = [
+      ...remoteYaps.slice().reverse(),
+      ...yaps.slice().reverse().slice(0, 5),
+      ...approved,
+      ...demoPosts.slice(0, 3)
+    ].map(p => postCard(p)).join('');
+  }
+}
 function trustBadge(p) {
   if (
     p.verificationLevel === 'gold' &&
